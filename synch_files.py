@@ -7,8 +7,24 @@ from datetime import datetime
 
 # --- Argument Parsing ---
 parser = argparse.ArgumentParser(description="Bi-directional file sync")
-parser.add_argument("src", help="Source directory")
-parser.add_argument("dst", help="Destination directory")
+parser.add_argument("--src", help="Source directory", required=True)
+parser.add_argument("--dst", help="Destination directory", required=True)
+parser.add_argument(
+    "-r",
+    "--reference",
+    choices=["source", "destination"],
+    help="If specified, only syncs from one side to the other."
+)
+parser.add_argument(
+    "--mirror",
+    action="store_true",
+    help="If set, makes the destination an exact mirror of the reference: deletes files!"
+)
+parser.add_argument(
+    "--dry-run",
+    action="store_true",
+    help="Preview actions without making changes"
+)
 args = parser.parse_args()
 
 LOCAL_DIR = Path(args.src)
@@ -26,6 +42,43 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+def delete_extra_files(reference_dir: Path, target_dir: Path):
+    """
+    🧹 Deletes files and folders in target_dir that do not exist in reference_dir.
+    This is used for true mirroring.
+    """
+    for root, dirs, files in os.walk(target_dir, topdown=False):
+        rel_path = Path(root).relative_to(target_dir)
+        ref_path = reference_dir / rel_path
+
+        # Delete files not in reference
+        for file in files:
+            target_file = Path(root) / file
+            ref_file = ref_path / file
+            if not ref_file.exists():
+                if (args.dry_run):
+                    logging.info(f"[Dry-run] Would delete file: {target_file}")
+                else:
+                    try:
+                        target_file.unlink()
+                        logging.info(f"Deleted extra file: {target_file}")
+                    except Exception as e:
+                        logging.error(f"Failed to delete file {target_file}: {e}")
+
+        # Delete empty dirs not in reference
+        for dir in dirs:
+            target_subdir = Path(root) / dir
+            ref_subdir = ref_path / dir
+            if not ref_subdir.exists():
+                if (args.dry_run):
+                    logging.info(f"[Dry-run] Would delete directory:{target_subdir}")
+                else:
+                    try:
+                        shutil.rmtree(target_subdir)
+                        logging.info(f"Deleted extra directory: {target_subdir}")
+                    except Exception as e:
+                        logging.error(f"Failed to delete directory {target_subdir}: {e}")
+
 def copy_file(src: Path, dst: Path):
     """
     📂 Copy a single file from src to dst.
@@ -37,6 +90,11 @@ def copy_file(src: Path, dst: Path):
         # Skip unwanted files based on extension
         if any(src.name.endswith(ext) for ext in IGNORED_EXTENSIONS):
             logging.info(f"Skipped ignored file: {src}")
+            return
+        
+        # Handling dry run (so just logging what would happen)
+        if (args.dry_run):
+            logging.info(f"[Dry-run] Would copy: {src} -> {dst}")
             return
         
         # Ensure the destination folder exists
@@ -95,8 +153,22 @@ if __name__ == "__main__":
     elif not REMOTE_DIR.exists():
         logging.error(f"Remote path not found: {REMOTE_DIR}")
     else:
-        # Start the bi-directional sync
-        bi_directional_sync(LOCAL_DIR, REMOTE_DIR)
+        if (args.reference == "source"):
+            logging.info("Reference mode: syncing source -> destination only")
+            sync_dirs(LOCAL_DIR, REMOTE_DIR)
+            if (args.mirror):
+                logging.info("Mirror mode: deleting extra files in destination")
+                delete_extra_files(LOCAL_DIR, REMOTE_DIR)
+        elif (args.reference == "destination"):
+            logging.info("Reference mode: syncing destination -> source only")
+            sync_dirs(REMOTE_DIR, LOCAL_DIR)
+            if (args.mirror):
+                logging.info("Mirror mode: deleting extra files in destination")
+                delete_extra_files(LOCAL_DIR, REMOTE_DIR)
+        else:
+            logging.info("Bi-directional sync mode")
+            # Start the bi-directional sync
+            bi_directional_sync(LOCAL_DIR, REMOTE_DIR)
 
     # Done! Safe total duration
     logging.info(f"✅ Sync complete. Duration: {datetime.now() - start_time}")
