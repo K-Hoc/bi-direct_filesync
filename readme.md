@@ -111,3 +111,8 @@ This will copy all newer files from `C:\Data` to the server and delete any files
 
 ## 📄 License
 This script is provided as-is under the [MIT License](https://opensource.org/licenses/MIT).
+
+---
+
+## WIP
+Currently working on logging file deletion (logging which file got when deleted and why).

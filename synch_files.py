@@ -42,6 +42,10 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+
+# ------------------------------------------------------------
+# --- Functions
+# ------------------------------------------------------------
 def delete_extra_files(reference_dir: Path, target_dir: Path):
     """
     🧹 Deletes files and folders in target_dir that do not exist in reference_dir.
@@ -142,6 +146,10 @@ def bi_directional_sync(dir1: Path, dir2: Path):
     logging.info(f"Syncing from {dir2} to {dir1}")
     sync_dirs(dir2, dir1)
 
+
+# ------------------------------------------------------------
+# --- Main functionality
+# ------------------------------------------------------------
 if __name__ == "__main__":
     # Record and show when the sync starts
     start_time = datetime.now()
